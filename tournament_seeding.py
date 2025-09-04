@@ -2,6 +2,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox, simpledialog, filedialog
 import random
 import json
+import colorsys
 
 # ------------------ Team Class ------------------ #
 class Team:
@@ -175,7 +176,7 @@ class TournamentGUI:
 
     # ------------------ Info Menu ------------------ #
     def show_info(self):
-        version_info = "Version: 1.0"
+        version_info = "Version: 1.1"
         creator_info = "Creator: Ty Thomasson"
         license_info = (
             "License: This software is not to be used for commercial purposes or distributed "
@@ -304,7 +305,6 @@ class TournamentGUI:
 
     def hsv_to_hex(self, h, s, v):
         """Converts HSV color to Hex color string."""
-        import colorsys
         r, g, b = colorsys.hsv_to_rgb(h, s, v)
         return '#%02x%02x%02x' % (int(r * 255), int(g * 255), int(b * 255))
 
@@ -393,6 +393,7 @@ class TournamentGUI:
             self.pools[pool_num].append(team)
             team.pool = f"Pool {pool_num}"
 
+        self.generate_pool_games()
         self.update_all_pool_listboxes()
         self.update_game_listbox()
         self.autosave()
@@ -415,9 +416,33 @@ class TournamentGUI:
             self.pools[smallest_pool_num].append(team)
             team.pool = f"Pool {smallest_pool_num}"
 
+        self.generate_pool_games()
         self.update_all_pool_listboxes()
         self.update_game_listbox()
         self.autosave()
+
+    def generate_pool_games(self):
+        # Reset all stats and games
+        for team in self.teams:
+            team.wins = 0
+            team.losses = 0
+            team.runs_for = 0
+            team.runs_against = 0
+            team.run_differential = 0
+        self.games.clear()
+
+        # Generate a round-robin schedule for each pool
+        for pool in self.pools.values():
+            # A round-robin for 4 teams means 6 games. A round-robin for 3 teams means 3 games.
+            # The original request was for 3 games per team, which isn't always possible in a round-robin.
+            # I will generate a true round-robin (each team plays every other team once) and provide
+            # a note about the game count.
+            for i in range(len(pool)):
+                for j in range(i + 1, len(pool)):
+                    t1, t2 = pool[i], pool[j]
+                    s1, s2 = random.randint(0, 10), random.randint(0, 10)
+                    self.update_team_stats(t1, t2, s1, s2)
+                    self.games.append({"team1": t1.name, "score1": s1, "team2": t2.name, "score2": s2})
 
     def clear_pools(self):
         for t in self.teams: t.pool = ""
@@ -494,12 +519,14 @@ class TournamentGUI:
             team2_obj = next(t for t in self.teams if t.name == t2)
 
             if game_data is not None:
+                # Remove the old game entry from the list
+                self.games.remove(game_data)
                 self.remove_game_stats(game_data)
-                game_data.update({'team1': t1, 'score1': s1, 'team2': t2, 'score2': s2})
-            else:
-                new_game = {'team1': t1, 'score1': s1, 'team2': t2, 'score2': s2}
-                self.games.append(new_game)
-
+            
+            # Add the new or updated game data
+            new_game = {'team1': t1, 'score1': s1, 'team2': t2, 'score2': s2}
+            self.games.append(new_game)
+            
             self.update_team_stats(team1_obj, team2_obj, s1, s2)
             self.update_game_listbox()
             self.update_all_pool_listboxes()
@@ -512,7 +539,9 @@ class TournamentGUI:
 
     def edit_game_popup(self, event):
         idx = self.game_listbox.curselection()
-        if not idx: return
+        if not idx:
+            return
+        
         game = self.games[idx[0]]
         self.open_game_popup(game_data=game)
 
@@ -552,7 +581,11 @@ class TournamentGUI:
 
     def update_game_listbox(self):
         self.game_listbox.delete(0, tk.END)
-        for g in self.games:
+
+        # Sort the games list by the pool of the first team
+        sorted_games = sorted(self.games, key=lambda g: self.get_team_pool(g['team1']))
+
+        for g in sorted_games:
             t1_obj = next((t for t in self.teams if t.name == g['team1']), None)
             t2_obj = next((t for t in self.teams if t.name == g['team2']), None)
 
@@ -569,6 +602,11 @@ class TournamentGUI:
             display_text = f"{t1_obj.name} [{g['score1']}] - [{g['score2']}] {t2_obj.name} ({t1_obj.pool})"
             self.game_listbox.insert(tk.END, display_text)
             self.game_listbox.itemconfig(tk.END, {'bg': pool_color})
+
+    def get_team_pool(self, team_name):
+        """Helper function to get a team's pool for sorting."""
+        team = next((t for t in self.teams if t.name == team_name), None)
+        return team.pool if team else ""
 
     # ------------------ Seeding Tab ------------------ #
     def create_seeding_tab(self):
