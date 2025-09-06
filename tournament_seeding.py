@@ -176,7 +176,7 @@ class TournamentGUI:
 
     # ------------------ Info Menu ------------------ #
     def show_info(self):
-        version_info = "Version: 1.1"
+        version_info = "Version: 1.2"
         creator_info = "Creator: Ty Thomasson"
         license_info = (
             "License: This software is not to be used for commercial purposes or distributed "
