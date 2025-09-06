@@ -30,7 +30,7 @@ class Team:
     def from_dict(data):
         t = Team(data["name"])
         t.wins = data["wins"]
-        t.losses = data["losses"]
+        t.losses = data["wins"]
         t.runs_for = data["runs_for"]
         t.runs_against = data["runs_against"]
         t.run_differential = data["run_differential"]
@@ -472,7 +472,7 @@ class TournamentGUI:
         self.game_listbox.pack(fill="both", expand=True, padx=20, pady=10)
         self.game_listbox.bind("<Double-1>", self.edit_game_popup)
 
-    def open_game_popup(self, game_data=None):
+    def open_game_popup(self, game_data=None, game_index=None):
         popup = tk.Toplevel(self.root)
         popup.title("Add/Edit Game")
         popup.geometry("300x250")
@@ -519,14 +519,20 @@ class TournamentGUI:
             team2_obj = next(t for t in self.teams if t.name == t2)
 
             if game_data is not None:
-                # Remove the old game entry from the list
-                self.games.remove(game_data)
+                # Remove old stats before applying new ones
                 self.remove_game_stats(game_data)
-            
-            # Add the new or updated game data
-            new_game = {'team1': t1, 'score1': s1, 'team2': t2, 'score2': s2}
-            self.games.append(new_game)
-            
+                
+                # Update the existing game entry in place
+                self.games[game_index]['team1'] = t1
+                self.games[game_index]['score1'] = s1
+                self.games[game_index]['team2'] = t2
+                self.games[game_index]['score2'] = s2
+                
+            else:
+                # Add a new game
+                new_game = {'team1': t1, 'score1': s1, 'team2': t2, 'score2': s2}
+                self.games.append(new_game)
+                
             self.update_team_stats(team1_obj, team2_obj, s1, s2)
             self.update_game_listbox()
             self.update_all_pool_listboxes()
@@ -543,27 +549,34 @@ class TournamentGUI:
             return
         
         game = self.games[idx[0]]
-        self.open_game_popup(game_data=game)
+        self.open_game_popup(game_data=game, game_index=idx[0])
 
     def remove_game_stats(self, game):
-        t1 = next(t for t in self.teams if t.name == game['team1'])
-        t2 = next(t for t in self.teams if t.name == game['team2'])
+        # Find the teams to update stats
+        t1_name = game['team1']
+        t2_name = game['team2']
+        t1_obj = next((t for t in self.teams if t.name == t1_name), None)
+        t2_obj = next((t for t in self.teams if t.name == t2_name), None)
+
+        if not t1_obj or not t2_obj:
+            return
+
         s1, s2 = game['score1'], game['score2']
 
-        t1.runs_for -= s1
-        t1.runs_against -= s2
-        t2.runs_for -= s2
-        t2.runs_against -= s1
+        t1_obj.runs_for -= s1
+        t1_obj.runs_against -= s2
+        t2_obj.runs_for -= s2
+        t2_obj.runs_against -= s1
 
         if s1 > s2:
-            t1.wins -= 1
-            t2.losses -= 1
+            t1_obj.wins -= 1
+            t2_obj.losses -= 1
         elif s2 > s1:
-            t2.wins -= 1
-            t1.losses -= 1
+            t2_obj.wins -= 1
+            t1_obj.losses -= 1
         
-        t1.run_differential = t1.runs_for - t1.runs_against
-        t2.run_differential = t2.runs_for - t2.runs_against
+        t1_obj.run_differential = t1_obj.runs_for - t1_obj.runs_against
+        t2_obj.run_differential = t2_obj.runs_for - t2_obj.runs_against
 
     def update_team_stats(self, team1, team2, s1, s2):
         team1.runs_for += s1
@@ -582,14 +595,12 @@ class TournamentGUI:
     def update_game_listbox(self):
         self.game_listbox.delete(0, tk.END)
 
-        # Sort the games list by the pool of the first team
-        sorted_games = sorted(self.games, key=lambda g: self.get_team_pool(g['team1']))
-
-        for g in sorted_games:
+        for g in self.games:
             t1_obj = next((t for t in self.teams if t.name == g['team1']), None)
             t2_obj = next((t for t in self.teams if t.name == g['team2']), None)
 
-            if not t1_obj or not t2_obj: continue # Skip if a team in the game no longer exists
+            if not t1_obj or not t2_obj:
+                continue # Skip if a team in the game no longer exists
 
             pool_color = 'white'
             if t1_obj.pool and "Pool" in t1_obj.pool:
