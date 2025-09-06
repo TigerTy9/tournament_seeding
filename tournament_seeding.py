@@ -14,6 +14,7 @@ class Team:
         self.runs_against = 0
         self.run_differential = 0
         self.pool = ""
+        self.games_played = 0
 
     def to_dict(self):
         return {
@@ -23,18 +24,20 @@ class Team:
             "runs_for": self.runs_for,
             "runs_against": self.runs_against,
             "run_differential": self.run_differential,
-            "pool": self.pool
+            "pool": self.pool,
+            "games_played": self.games_played
         }
 
     @staticmethod
     def from_dict(data):
         t = Team(data["name"])
         t.wins = data["wins"]
-        t.losses = data["wins"]
+        t.losses = data["losses"]
         t.runs_for = data["runs_for"]
         t.runs_against = data["runs_against"]
         t.run_differential = data["run_differential"]
         t.pool = data["pool"]
+        t.games_played = data.get("games_played", 0)
         return t
 
 # ------------------ Tournament GUI ------------------ #
@@ -51,13 +54,14 @@ class TournamentGUI:
         self.pool_count = 5
         self.pool_size = 4
         self.current_file = None
+        self.games_per_team_var = tk.StringVar(value="3")
+        self.allow_replays_var = tk.BooleanVar(value=False)
 
         self.pool_container = None
         self.pool_frames = {}
         self.pool_listboxes = {}
         self.pool_colors = {}
         
-        # New: 'Bank' listbox for unassigned teams
         self.bank_listbox = None
 
         self.drag_data = {"item": None, "source_listbox": None}
@@ -67,7 +71,6 @@ class TournamentGUI:
 
     # ------------------ GUI ------------------ #
     def create_widgets(self):
-        # --- Menu --- #
         menubar = tk.Menu(self.root)
         self.root.config(menu=menubar)
 
@@ -83,7 +86,6 @@ class TournamentGUI:
         menubar.add_cascade(label="Info", menu=info_menu)
         info_menu.add_command(label="Version & License", command=self.show_info)
 
-        # --- Tabs --- #
         self.notebook = ttk.Notebook(self.root)
         self.notebook.pack(fill="both", expand=True)
 
@@ -108,11 +110,10 @@ class TournamentGUI:
         
         popup = tk.Toplevel(self.root)
         popup.title("Startup")
-        popup.geometry("300x150") # Set size first to get correct dimensions
+        popup.geometry("300x150")
         popup.transient(self.root)
         popup.grab_set()
 
-        # Center the popup window on the main window
         self.root.update_idletasks()
         main_x = self.root.winfo_x()
         main_y = self.root.winfo_y()
@@ -126,7 +127,6 @@ class TournamentGUI:
         y = main_y + (main_height // 2) - (popup_height // 2)
         
         popup.geometry(f"+{x}+{y}")
-
 
         def handle_new():
             popup.destroy()
@@ -163,7 +163,7 @@ class TournamentGUI:
             "teams":[t.to_dict() for t in self.teams],
             "games":self.games,
             "pool_count":self.pool_count,
-            "pool_size":self.pool_size
+            "pool_size":self.pool_size,
         }
         with open(self.current_file, "w") as f:
             json.dump(data, f, indent=4)
@@ -176,7 +176,7 @@ class TournamentGUI:
 
     # ------------------ Info Menu ------------------ #
     def show_info(self):
-        version_info = "Version: 1.2"
+        version_info = "Version: 1.3"
         creator_info = "Creator: Ty Thomasson"
         license_info = (
             "License: This software is not to be used for commercial purposes or distributed "
@@ -274,7 +274,6 @@ class TournamentGUI:
         self.pool_container = ttk.Frame(self.tab_pools)
         self.pool_container.pack(fill="both", expand=True, padx=10, pady=10)
 
-        # Bank Frame
         bank_frame = ttk.LabelFrame(self.pool_container, text="Bank (Unassigned Teams)")
         bank_frame.pack(side=tk.LEFT, fill="both", expand=True, padx=5, pady=5)
         self.bank_listbox = tk.Listbox(bank_frame)
@@ -287,7 +286,6 @@ class TournamentGUI:
         self.pool_listboxes = {}
         self.pool_colors = {}
         
-        # Generate visually distinct colors
         hues = [i / self.pool_count for i in range(self.pool_count)]
         for i, h in enumerate(hues):
             self.pool_colors[i + 1] = self.hsv_to_hex(h, 0.5, 0.8)
@@ -304,7 +302,6 @@ class TournamentGUI:
             lb.bind("<ButtonRelease-1>", self.on_drag_release)
 
     def hsv_to_hex(self, h, s, v):
-        """Converts HSV color to Hex color string."""
         r, g, b = colorsys.hsv_to_rgb(h, s, v)
         return '#%02x%02x%02x' % (int(r * 255), int(g * 255), int(b * 255))
 
@@ -336,13 +333,11 @@ class TournamentGUI:
             target_listbox = self.drag_data["target_listbox"]
             target_pool_name = target_listbox.master.cget("text")
 
-            # Remove from source pool
             if source_listbox != self.bank_listbox:
                 source_pool_num = int(source_listbox.master.cget("text").split()[1])
                 if team_to_move in self.pools.get(source_pool_num, []):
                     self.pools[source_pool_num].remove(team_to_move)
             
-            # Add to target pool
             if target_listbox == self.bank_listbox:
                 team_to_move.pool = ""
             else:
@@ -361,7 +356,6 @@ class TournamentGUI:
         self.drag_data = {"item": None, "source_listbox": None}
     
     def update_all_pool_listboxes(self):
-        # Clear and repopulate the bank listbox
         self.bank_listbox.delete(0, tk.END)
         assigned_teams = set()
         for pool_teams in self.pools.values():
@@ -372,7 +366,6 @@ class TournamentGUI:
         for t in unassigned_teams:
             self.bank_listbox.insert(tk.END, t.name)
 
-        # Clear and repopulate all pool listboxes
         for pool_num, lb in self.pool_listboxes.items():
             lb.delete(0, tk.END)
             for t in self.pools.get(pool_num, []):
@@ -384,7 +377,6 @@ class TournamentGUI:
         shuffled = self.teams[:]
         random.shuffle(shuffled)
         
-        # Distribute teams evenly using round-robin
         pool_keys = sorted(list(self.pool_listboxes.keys()))
         for i, team in enumerate(shuffled):
             pool_num = pool_keys[i % len(pool_keys)]
@@ -393,7 +385,15 @@ class TournamentGUI:
             self.pools[pool_num].append(team)
             team.pool = f"Pool {pool_num}"
 
-        self.generate_pool_games()
+        self.games.clear()
+        for team in self.teams:
+            team.wins = 0
+            team.losses = 0
+            team.runs_for = 0
+            team.runs_against = 0
+            team.run_differential = 0
+            team.games_played = 0
+
         self.update_all_pool_listboxes()
         self.update_game_listbox()
         self.autosave()
@@ -402,11 +402,9 @@ class TournamentGUI:
         unassigned_teams = [t for t in self.teams if not t.pool]
         random.shuffle(unassigned_teams)
         
-        # Create a list of all pools, including empty ones
         all_pools = [p for p in self.pool_listboxes.keys()]
         
         for team in unassigned_teams:
-            # Find the smallest pool and add the team to it
             current_pool_sizes = {pool_num: len(self.pools.get(pool_num, [])) for pool_num in all_pools}
             smallest_pool_num = min(current_pool_sizes, key=current_pool_sizes.get)
             
@@ -416,33 +414,82 @@ class TournamentGUI:
             self.pools[smallest_pool_num].append(team)
             team.pool = f"Pool {smallest_pool_num}"
 
-        self.generate_pool_games()
-        self.update_all_pool_listboxes()
-        self.update_game_listbox()
-        self.autosave()
-
-    def generate_pool_games(self):
-        # Reset all stats and games
+        self.games.clear()
         for team in self.teams:
             team.wins = 0
             team.losses = 0
             team.runs_for = 0
             team.runs_against = 0
             team.run_differential = 0
-        self.games.clear()
+            team.games_played = 0
 
-        # Generate a round-robin schedule for each pool
-        for pool in self.pools.values():
-            # A round-robin for 4 teams means 6 games. A round-robin for 3 teams means 3 games.
-            # The original request was for 3 games per team, which isn't always possible in a round-robin.
-            # I will generate a true round-robin (each team plays every other team once) and provide
-            # a note about the game count.
-            for i in range(len(pool)):
-                for j in range(i + 1, len(pool)):
-                    t1, t2 = pool[i], pool[j]
-                    s1, s2 = random.randint(0, 10), random.randint(0, 10)
-                    self.update_team_stats(t1, t2, s1, s2)
-                    self.games.append({"team1": t1.name, "score1": s1, "team2": t2.name, "score2": s2})
+        self.update_all_pool_listboxes()
+        self.update_game_listbox()
+        self.autosave()
+
+    def generate_games(self, use_random_scores=False):
+        try:
+            games_per_team = int(self.games_per_team_var.get())
+            if games_per_team < 0:
+                raise ValueError
+        except ValueError:
+            messagebox.showerror("Invalid Input", "Games per team must be a non-negative integer.")
+            return
+
+        self.games.clear()
+        for team in self.teams:
+            team.wins = 0
+            team.losses = 0
+            team.runs_for = 0
+            team.runs_against = 0
+            team.run_differential = 0
+            team.games_played = 0
+        
+        all_teams_in_pools = [t for t in self.teams if t.pool]
+        
+        teams_per_pool = {pool_num: len(self.pools[pool_num]) for pool_num in self.pools}
+        total_games_needed = len(all_teams_in_pools) * games_per_team / 2
+        total_possible_unique_games = sum(n * (n - 1) / 2 for n in teams_per_pool.values())
+
+        allow_replays = self.allow_replays_var.get()
+
+        if total_games_needed > total_possible_unique_games and not allow_replays:
+             messagebox.showwarning("Warning", "Cannot generate enough unique games. Please check your pool size or allow replays.")
+             return
+
+        played_pairs = set()
+
+        for team1 in all_teams_in_pools:
+            if team1.games_played >= games_per_team:
+                continue
+
+            eligible_opponents = [t for t in all_teams_in_pools if t.name != team1.name and t.pool == team1.pool and t.games_played < games_per_team]
+            random.shuffle(eligible_opponents)
+
+            for team2 in eligible_opponents:
+                pair = tuple(sorted((team1.name, team2.name)))
+                if pair not in played_pairs and team1.games_played < games_per_team and team2.games_played < games_per_team:
+                    score1 = random.randint(0, 10) if use_random_scores else 0
+                    score2 = random.randint(0, 10) if use_random_scores else 0
+                    self.games.append({"team1": team1.name, "score1": score1, "team2": team2.name, "score2": score2})
+                    played_pairs.add(pair)
+                    self.update_team_stats(team1, team2, score1, score2, is_new_game=True)
+
+
+        if allow_replays:
+            for team1 in all_teams_in_pools:
+                while team1.games_played < games_per_team:
+                    eligible_opponents = [t for t in all_teams_in_pools if t.name != team1.name and t.pool == team1.pool and t.games_played < games_per_team]
+                    if not eligible_opponents:
+                        break
+                    team2 = random.choice(eligible_opponents)
+                    score1 = random.randint(0, 10) if use_random_scores else 0
+                    score2 = random.randint(0, 10) if use_random_scores else 0
+                    self.games.append({"team1": team1.name, "score1": score1, "team2": team2.name, "score2": score2})
+                    self.update_team_stats(team1, team2, score1, score2, is_new_game=True)
+
+        self.update_game_listbox()
+        self.autosave()
 
     def clear_pools(self):
         for t in self.teams: t.pool = ""
@@ -452,20 +499,47 @@ class TournamentGUI:
         self.autosave()
 
     def set_pool_settings(self):
-        pools = simpledialog.askinteger("Pools", "Number of Pools:", initialvalue=self.pool_count)
-        size = simpledialog.askinteger("Pool Size", "Number of Teams per Pool:", initialvalue=self.pool_size)
-        if pools and size:
-            self.pool_count = pools
-            self.pool_size = size
-            self.rebuild_pool_frames()
-            self.clear_pools()
-            self.autosave()
+        popup = tk.Toplevel(self.root)
+        popup.title("Pool Settings")
+        popup.geometry("300x150")
+        popup.transient(self.root)
+        popup.grab_set()
+
+        ttk.Label(popup, text="Number of Pools:").pack(pady=5)
+        pool_count_var = tk.StringVar(value=str(self.pool_count))
+        pool_count_entry = ttk.Entry(popup, textvariable=pool_count_var)
+        pool_count_entry.pack()
+
+        def save_settings():
+            try:
+                new_pool_count = int(pool_count_var.get())
+                if new_pool_count <= 0:
+                    messagebox.showerror("Error", "Number of pools must be a positive integer.")
+                    return
+                self.pool_count = new_pool_count
+                self.rebuild_pool_frames()
+                self.clear_pools()
+                popup.destroy()
+                self.autosave()
+            except ValueError:
+                messagebox.showerror("Error", "Please enter a valid number.")
+
+        ttk.Button(popup, text="Save", command=save_settings).pack(pady=10)
+        self.root.wait_window(popup)
 
     # ------------------ Games Tab ------------------ #
     def create_game_tab(self):
         frame_top = ttk.Frame(self.tab_games)
         frame_top.pack(pady=10)
 
+        ttk.Label(frame_top, text="Games per Team:").pack(side=tk.LEFT, padx=5)
+        self.games_per_team_entry = ttk.Entry(frame_top, textvariable=self.games_per_team_var, width=5)
+        self.games_per_team_entry.pack(side=tk.LEFT, padx=5)
+        
+        replay_check = ttk.Checkbutton(frame_top, text="Allow Replays", variable=self.allow_replays_var)
+        replay_check.pack(side=tk.LEFT, padx=5)
+
+        ttk.Button(frame_top, text="Generate Games", command=lambda: self.generate_games(use_random_scores=False)).pack(side=tk.LEFT, padx=5)
         ttk.Button(frame_top, text="Add Game", command=self.open_game_popup).pack(side=tk.LEFT, padx=5)
 
         self.game_listbox = tk.Listbox(self.tab_games)
@@ -511,29 +585,27 @@ class TournamentGUI:
             try:
                 s1 = int(score1_var.get())
                 s2 = int(score2_var.get())
-            except:
+            except ValueError:
                 messagebox.showerror("Error", "Scores must be integers")
                 return
 
-            team1_obj = next(t for t in self.teams if t.name == t1)
-            team2_obj = next(t for t in self.teams if t.name == t2)
+            team1_obj = next((t for t in self.teams if t.name == t1), None)
+            team2_obj = next((t for t in self.teams if t.name == t2), None)
+            
+            if not team1_obj or not team2_obj:
+                messagebox.showerror("Error", "Selected teams do not exist.")
+                return
 
-            if game_data is not None:
-                # Remove old stats before applying new ones
-                self.remove_game_stats(game_data)
-                
-                # Update the existing game entry in place
-                self.games[game_index]['team1'] = t1
-                self.games[game_index]['score1'] = s1
-                self.games[game_index]['team2'] = t2
-                self.games[game_index]['score2'] = s2
-                
+            is_new_game = game_index is None
+
+            if not is_new_game:
+                self.remove_game_stats(self.games[game_index])
+                self.games[game_index] = {'team1': t1, 'score1': s1, 'team2': t2, 'score2': s2}
             else:
-                # Add a new game
                 new_game = {'team1': t1, 'score1': s1, 'team2': t2, 'score2': s2}
                 self.games.append(new_game)
                 
-            self.update_team_stats(team1_obj, team2_obj, s1, s2)
+            self.update_team_stats(team1_obj, team2_obj, s1, s2, is_new_game=is_new_game)
             self.update_game_listbox()
             self.update_all_pool_listboxes()
             self.autosave()
@@ -548,11 +620,33 @@ class TournamentGUI:
         if not idx:
             return
         
-        game = self.games[idx[0]]
-        self.open_game_popup(game_data=game, game_index=idx[0])
+        listbox_text = self.game_listbox.get(idx[0])
+        game = self.find_game_by_display_text(listbox_text)
+        if game:
+            original_index = self.games.index(game)
+            self.open_game_popup(game_data=game, game_index=original_index)
+        else:
+            messagebox.showerror("Error", "Could not find selected game.")
+
+    def find_game_by_display_text(self, text):
+        parts = text.split(" - ")
+        if len(parts) < 2: return None
+        t1_name = parts[0].split(" [")[0].strip()
+        t2_name = parts[1].split("] ")[1].split(" (")[0].strip()
+        try:
+            s1 = int(parts[0].split("[")[1].split("]")[0])
+            s2 = int(parts[1].split("[")[1].split("]")[0])
+        except (ValueError, IndexError):
+            return None # Handle malformed string
+
+        for game in self.games:
+            if (game['team1'] == t1_name and game['team2'] == t2_name and game['score1'] == s1 and game['score2'] == s2):
+                return game
+            elif (game['team1'] == t2_name and game['team2'] == t1_name and game['score1'] == s2 and game['score2'] == s1):
+                return game
+        return None
 
     def remove_game_stats(self, game):
-        # Find the teams to update stats
         t1_name = game['team1']
         t2_name = game['team2']
         t1_obj = next((t for t in self.teams if t.name == t1_name), None)
@@ -567,6 +661,9 @@ class TournamentGUI:
         t1_obj.runs_against -= s2
         t2_obj.runs_for -= s2
         t2_obj.runs_against -= s1
+        
+        t1_obj.games_played -= 1
+        t2_obj.games_played -= 1
 
         if s1 > s2:
             t1_obj.wins -= 1
@@ -578,29 +675,46 @@ class TournamentGUI:
         t1_obj.run_differential = t1_obj.runs_for - t1_obj.runs_against
         t2_obj.run_differential = t2_obj.runs_for - t2_obj.runs_against
 
-    def update_team_stats(self, team1, team2, s1, s2):
+    def update_team_stats(self, team1, team2, s1, s2, is_new_game=True):
+        if is_new_game:
+            team1.games_played += 1
+            team2.games_played += 1
+        
         team1.runs_for += s1
         team1.runs_against += s2
         team2.runs_for += s2
         team2.runs_against += s1
+        
         if s1 > s2:
             team1.wins += 1
             team2.losses += 1
         elif s2 > s1:
             team2.wins += 1
             team1.losses += 1
+            
         team1.run_differential = team1.runs_for - team1.runs_against
         team2.run_differential = team2.runs_for - team2.runs_against
+    
+    def get_pool_sort_key(self, game):
+        t1 = next((t for t in self.teams if t.name == game['team1']), None)
+        if t1 and t1.pool:
+            try:
+                return int(t1.pool.split()[1])
+            except (ValueError, IndexError):
+                return float('inf')
+        return float('inf')
 
     def update_game_listbox(self):
         self.game_listbox.delete(0, tk.END)
+        
+        sorted_games = sorted(self.games, key=self.get_pool_sort_key)
 
-        for g in self.games:
+        for g in sorted_games:
             t1_obj = next((t for t in self.teams if t.name == g['team1']), None)
             t2_obj = next((t for t in self.teams if t.name == g['team2']), None)
 
             if not t1_obj or not t2_obj:
-                continue # Skip if a team in the game no longer exists
+                continue
 
             pool_color = 'white'
             if t1_obj.pool and "Pool" in t1_obj.pool:
@@ -609,16 +723,11 @@ class TournamentGUI:
                     pool_color = self.pool_colors.get(pool_num, 'white')
                 except (ValueError, IndexError):
                     pass
-
+            
             display_text = f"{t1_obj.name} [{g['score1']}] - [{g['score2']}] {t2_obj.name} ({t1_obj.pool})"
             self.game_listbox.insert(tk.END, display_text)
             self.game_listbox.itemconfig(tk.END, {'bg': pool_color})
-
-    def get_team_pool(self, team_name):
-        """Helper function to get a team's pool for sorting."""
-        team = next((t for t in self.teams if t.name == team_name), None)
-        return team.pool if team else ""
-
+    
     # ------------------ Seeding Tab ------------------ #
     def create_seeding_tab(self):
         ttk.Button(self.tab_seeding, text="Calculate Seeding", command=self.calculate_seeding).pack(pady=10)
@@ -656,12 +765,11 @@ class TournamentGUI:
 
     def h2h_winner(self, t1, t2):
         for g in self.games:
-            if (g["team1"] == t1.name and g["team2"] == t2.name):
-                if g["score1"] > g["score2"]: return t1
-                elif g["score2"] > g["score1"]: return t2
-            if (g["team1"] == t2.name and g["team2"] == t1.name):
-                if g["score2"] > g["score1"]: return t2
-                elif g["score1"] > g["score2"]: return t1
+            if (g["team1"] == t1.name and g["team2"] == t2.name) or (g["team1"] == t2.name and g["team2"] == t1.name):
+                t1_score = g["score1"] if g["team1"] == t1.name else g["score2"]
+                t2_score = g["score2"] if g["team1"] == t1.name else g["score1"]
+                if t1_score > t2_score: return t1
+                elif t2_score > t1_score: return t2
         return None
 
     def show_team_history(self, event):
@@ -717,6 +825,21 @@ class TournamentGUI:
         self.current_file = filename
         self.rebuild_pool_frames()
         self.restore_pools_from_teams()
+        
+        for team in self.teams:
+            team.wins = 0
+            team.losses = 0
+            team.runs_for = 0
+            team.runs_against = 0
+            team.run_differential = 0
+            team.games_played = 0
+        
+        for g in self.games:
+            t1_obj = next((t for t in self.teams if t.name == g['team1']), None)
+            t2_obj = next((t for t in self.teams if t.name == g['team2']), None)
+            if t1_obj and t2_obj:
+                self.update_team_stats(t1_obj, t2_obj, g['score1'], g['score2'], is_new_game=True)
+
         self.update_all_views()
         messagebox.showinfo("Loaded", f"Tournament loaded from {filename}")
 
@@ -747,14 +870,7 @@ class TournamentGUI:
         self.pool_size = 4
         self.rebuild_pool_frames()
         self.random_pools()
-        self.games.clear()
-        for pool in self.pools.values():
-            for i in range(len(pool)):
-                for j in range(i+1, len(pool)):
-                    t1, t2 = pool[i], pool[j]
-                    s1, s2 = random.randint(0,10), random.randint(0,10)
-                    self.update_team_stats(t1, t2, s1, s2)
-                    self.games.append({"team1": t1.name, "score1": s1, "team2": t2.name, "score2": s2})
+        self.generate_games(use_random_scores=True)
         self.update_all_views()
         self.autosave()
 
